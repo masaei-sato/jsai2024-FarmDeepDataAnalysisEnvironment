@@ -162,6 +162,25 @@
         (yas-expand-snippet (yas--template-content snippet))
       (message "Snippet '%s' not found in %s for mode %s" snippet-name snippet-dir mode))))
 
+;;;;; append-region-to-my-miscfunctions-r
+;; 2024-2-23(Fri)
+;; ESSで作成したR関数をmy_miscfunctions.Rに追加する
+(defun my/append-region-to-my-miscfunctions-r ()
+  "Append the selected region to my_miscfunctions.R.
+   If my_miscfunctions.R does not exist, it will be created."
+  (interactive)
+  (unless (use-region-p)
+    (error "No region selected"))
+  (let ((file-name (concat (file-name-directory (buffer-file-name)) "my_miscfunctions.R"))
+        (content (buffer-substring-no-properties (region-beginning) (region-end))))
+    (if (file-writable-p file-name)
+        (with-temp-buffer
+          (insert content "\n") ; Ensure there is a newline after the appended content
+          ;; Create the file if it doesn't exist, or append to it if it does.
+          (append-to-file (point-min) (point-max) file-name)
+          (message "Appended to %s" file-name))
+      (error "Cannot write to file: %s" file-name))))
+
 ;;;;; org-ai-create-roxygen2
 ;; org-aiを使って選択した関数のroxygen2ドキュメントを作成する関数
 (defun org-ai-create-roxygen2 (start end)
@@ -327,6 +346,8 @@ my_add <- function(x, y) {
     "obj mngmt"
     ("rd" "Rdired" (lambda () (interactive) (ess-rdired)))
     ("vd" "view-data-print" (lambda () (interactive) (ess-view-data-print)))
+    "save"
+    ("sf" "save function"  my/append-region-to-my-miscfunctions-r)
     ]
    ["pkg dev"
     ("rD" "Rutils devtools" rutils-devtools)
