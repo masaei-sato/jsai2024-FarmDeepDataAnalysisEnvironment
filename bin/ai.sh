@@ -26,7 +26,7 @@
 #   ./ai.sh -h
 #
 # Example usage:
-#  ./ai.sh "What is Japanese Society of Agricultural Informatics?"
+#  ./ai.sh "What is agricultural informatics?"
 
 # Help message
 usage() {

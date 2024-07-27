@@ -1,0 +1,331 @@
+#+TITLE: 図
+#+SUBTITLE: JSAI2024発表：言語モデルと連携した農場ディープデータの解析環境の設計と労働時間分析への適用
+#+AUTHOR: 佐藤正衛
+#+EMAIL: masaei@affrc.go.jp
+#+DATE: 2024-3-1(Fri)
+#+Created: 2024-3-1(Fri)
+#+Revised: Time-stamp: <2024-05-30 11:25:48 masaei>
+* Export Configuration                                     :noexport:ARCHIVE:
+#+LANGUAGE:  ja
+#+LATEX_CLASS: jsarticle
+#+LATEX_CLASS_OPTIONS: [uplatex,a4paper,dvipdfmx]
+#+LATEX_HEADER: \usepackage{here}
+#+LATEX_HEADER: \usepackage{ulem} % アンダーライン途中で改行するなら \usepackage{udline}。Dropboxからudline.styをsymlink。ただし\ulineを\ulに変更する必要
+#+LATEX_HEADER: \usepackage{amssymb, amsmath} % checkbox[ ], [X]を利用したとき
+#+STARTUP: content indent hideblocks shrink
+#+OPTIONS:   H:3  num:t  toc:nil  \n:nil  @:t  ::t  |:t  ^:nil  *:t
+#+OPTIONS:   TeX:nil  LaTeX:nil  skip:t  author:t  timestamp:t f:t
+#+Summary: 
+#+KEYWORDS: 
+#+TAGS:     noexport ignore
+
+* ディープデータ解析システム全体イメージ
+** code                                                            :ARCHIVE:
+#+NAME: deepdata_analysis
+#+BEGIN_SRC dot :file img/deepdata_analysis.png :exports results :cache no :cmdline -Nfontname="MigMix 2P" -Kdot -Tpng
+  // * graph
+  digraph G {
+  // ** 設定
+    graph [rankdir=TB,fontname="MigMix 2P", nodesep=0.6, ranksep=0.3];
+    //graph [label="分析環境"];
+    node [fontname="MigMix 2P"];
+    // node [shape=box,style=filled,colorscheme=accent7];
+
+  // ** node
+    // 農場ディープデータ
+    external_data [label="農場\nディープデータ", shape=cylinder, style=filled, fillcolor="#deebf7"];
+
+    // 大規模言語モデル(LLM)
+    ai [label="LLM(生成AI)\n(APIサーバー)", shape=component, color="darkgreen"];
+
+    // データフレーム
+    data_frame [label="データ", shape=record, style=filled, color="#deebf7"];
+
+    // ドキュメント
+    document [label="テキスト文書", shape=box, style=filled, color="lightgrey"];
+
+    // 関数
+    function [label="関数", shape=octagon, style=filled, fillcolor="#ffff99"];
+
+    // モデル
+    model [label="モデル", shape=parallelogram, color="purple"];
+
+    // 分析結果
+    result [label="結果", shape=note, style=filled, color="#beaed4"];
+
+  // ** subgraph
+    subgraph cluster_1 {
+        label = "ローカルPC解析環境（Emacs）";
+        color = "dimgrey";
+
+        subgraph cluster_1_1 {
+            label = "プログラミング言語（R）";
+            color = "grey";
+            function;
+            model;
+            data_frame;
+            result;
+        }
+        document;
+        result;
+        script [label="APIクライアント", shape=diamond, style=filled, color="lightgrey"];
+        user [label="ユーザー", shape=ellipse, color="lightblue", style="filled"];
+    }
+
+  // ** edge  
+  // エッジの設定
+  external_data -> document;
+  ai -> document;
+  function -> data_frame[dir="both"];
+  model -> function;
+  function -> result;
+  result -> user;
+  document -> function;
+  document -> script;
+  script -> ai[dir="both"];
+  user -> ai[dir="both", style="dotted"];
+  user -> document[style="bold"];
+  user-> script[style=dashed];
+  }
+#+END_SRC
+
+** figure
+#+ATTR_ORG: :width 400
+#+RESULTS: deepdata_analysis
+[[file:img/deepdata_analysis.png]]
+
+* apiリクエスト関数
+** code                                                            :ARCHIVE:
+#+NAME: request_api
+#+BEGIN_SRC dot :file img/request_api.png :exports results :cache no :cmdline -Nfontname="MigMix 2P" -Kdot -Tpng
+  // * graph
+  digraph openai_api_request_flow {
+      rankdir=TB;
+      fontname="MigMix 2M";
+      node [style="filled", color="lightgrey"];
+  // ** subgraph
+  subgraph cluster_user {
+      label = "ユーザー";
+      color="lightblue";
+      user_input [shape=ellipse, label="入力\n(ユーザーコンテンツ, モデル等)", color="lightblue"];
+      user_output [shape=ellipse, label="出力\n(レスポンスの処理結果)", color="lightblue"];
+  }
+
+  // ** subgraph
+  subgraph cluster_function {
+      label = "Rの関数: openai_api_request";
+      color="lightgrey";
+
+      construct_request [shape=box, label="リクエスト(APIキー, ヘッダー, ボディ)\nの構築\n(jsonlite::toJSONを使用)"];
+      api_call [shape=box, label="API呼び出し\n(httr::POSTを使用)", color="yellow"];
+      parse_response [shape=box, label="レスポンスの解析", color="lightgrey"];
+  }
+
+  // ** edge
+  ai_server [shape=component, style="rounded", label="生成AI(APIサーバー)\nリクエストの処理とレスポンスの送信", color="darkgreen"];
+
+  // ** edge
+  user_input -> construct_request -> api_call -> ai_server -> parse_response -> user_output;
+  }
+#+END_SRC
+** figure
+#+ATTR_ORG: :width 400
+#+RESULTS: request_api
+[[file:img/request_api.png]]
+
+* タスク別生成AI支援
+ # 協働：(cooperation; collaboration) 協力して働くこと。同じ目的のために、二人以上が協力して働くこと。cooperation of labor。
+ # 共働：〔生〕(coaction) （→）相互作用に同じ。ともばたらき。
+** code                                                            :ARCHIVE:
+#+NAME: ai-task
+#+BEGIN_SRC dot :file img/ai-task.png :exports results :cache no :cmdline -Nfontname="MigMix 2M" -Tpng
+  // * AI Task
+  digraph ai_task_flow {
+      rankdir=LR;
+      fontname="MigMix 2M";
+      node [style="filled", color="lightgrey"];
+
+  // ** subgraph for User
+  subgraph cluster_user {
+      label = "ユーザー";
+      color="lightblue";
+      user_input [shape=ellipse, label="入力\n(タスク別)", color="lightblue"];
+      user_feedback [shape=ellipse, label="出力\n(AIからの回答\n+ユーザーレビュー)", color="lightblue"];
+  }
+
+  // ** subgraph for AI Utilization
+  subgraph cluster_ai {
+      label = "タスクメニュー";
+      color="lightgrey";
+
+      api_requirement [shape=box, label="要件定義"];
+      api_code [shape=box, label="コード提案"];
+      api_refactoring [shape=box, label="コード修正"];
+      api_comment [shape=box, label="コメント付与"];
+      api_help [shape=box, label="ヘルプ文書"];
+      api_test [shape=box, label="単体テスト"];
+      api_general [shape=box, label="一般的質問"];
+      api_other [shape=box, label="…"];
+
+      // 並び順
+      {rank=same; api_requirement; api_code; api_refactoring; api_comment; api_help; api_test; api_general; api_other;}
+
+      // 矢印は見えないようにする
+      // api_requirement -> api_code -> api_refactoring -> api_comment -> api_help -> api_test -> api_general [style=invis];
+      // 矢印の順序を逆にする
+      api_other -> api_general -> api_test -> api_help -> api_comment -> api_refactoring -> api_code -> api_requirement [style=invis];
+
+  }
+
+  // ** subgraph for AI Server
+  ai_server [shape=component, style="rounded", label="生成AI(APIサーバー)", color="darkgreen"];
+
+  // ** Edge
+  user_input -> api_requirement -> ai_server;
+  user_input -> api_code -> ai_server;
+  user_input -> api_refactoring -> ai_server;
+  user_input -> api_comment -> ai_server;
+  user_input -> api_help -> ai_server;
+  user_input -> api_test -> ai_server;
+  user_input -> api_general -> ai_server;
+  user_input -> api_other -> ai_server;
+
+  ai_server -> user_feedback [style=dashed, color="gray"];
+  }
+#+END_SRC
+** figure
+#+ATTR_ORG: :width 400
+#+RESULTS: ai-task
+[[file:img/ai-task.png]]
+
+* AIと協働した分析ワークフローのイメージ
+# ユーザー → 既存関数ある → 利用定義 →
+
+** code                                                            :ARCHIVE:
+#+NAME: man-ai-collaboration
+#+BEGIN_SRC dot :file img/man-ai-collaboration.png :exports results :cache no :cmdline -Nfontname="MigMix 2P" -Kdot -Tpng
+  // * graph
+  digraph data_flow_diagram {
+      node [shape = rectangle];
+  // ** node
+      Act_a [label = "農業生産活動", shape=ellipse, style=filled, color="#fdc086"];
+
+      FMIS [label = "農場管理情報システム\nFMIS", shape=cylinder, style=filled, fillcolor="#deebf7"];
+
+      data_in [label = "データ1", shape=record, style=filled, color="#deebf7"];
+      data_in_2 [label = "データ2", shape=record, style=filled, color="#deebf7", style=invis];
+      data_in_3 [label = "データ3", shape=record, style=filled, color="#deebf7", style=invis];
+      {rank=same; data_in; data_in_2; data_in_3;}    
+
+      fun [label = "分析技法1", shape=octagon, style=filled, fillcolor="#ffff99"];
+      fun_2 [label = "分析技法2", shape=octagon, style=filled, fillcolor="#ffff99", style=invis];
+      fun_3 [label = "分析技法3", shape=octagon, style=filled, fillcolor="#ffff99", style=invis];
+      {rank=same; fun; fun_2; fun_3;}
+
+      info [label = "支援情報1", shape=note, style=filled, color="#beaed4"];
+      info_2 [label = "支援情報2", shape=note, style=filled, color="#beaed4", style=invis];
+      info_3 [label = "支援情報3", shape=note, style=filled, color="#beaed4", style=invis];
+      {rank=same; info; info_2; info_3;}
+            
+      // 大規模言語モデル(LLM)
+      ai [label="生成AI\n(APIサーバー)", shape=component, color="darkgreen"];
+      human [label = "ユーザー", shape=ellipse, style=filled, color="lightblue"];
+      Act_b [label = "目標設定", shape=ellipse, style=filled, color="#fdc086"];
+  // ** subgraph
+          machine [label = "作業機", shape=circle, style=filled, color="#7fc97f"];
+
+  // ** edge
+      machine -> Act_a;
+      Act_a -> FMIS;
+
+      FMIS -> data_in;
+      FMIS -> data_in_2 [style=invis]
+      FMIS -> data_in_3 [style=invis]
+    
+      FMIS -> Act_a;
+
+      data_in -> fun
+      data_in_2 -> fun_2 [style=invis]
+      data_in_3 -> fun_3 [style=invis];
+
+      fun -> info;
+      fun_2 -> info_2 [style=invis];
+      fun_3 -> info_3 [style=invis];
+
+      info -> human;
+      info_2 -> human [style=invis];
+      info_3 -> human [style=invis];
+
+      ai -> human
+      human -> ai
+    
+      human -> Act_b;
+      Act_b -> Act_a;
+
+  // ** rank
+      {rank=same; machine; Act_a;}
+      {rank=same;  human; ai;}
+      {rank=same; info; Act_b;}
+  }
+#+END_SRC
+
+** figure
+#+ATTR_ORG: :width 300
+#+RESULTS: man-ai-collaboration
+[[file:img/man-ai-collaboration.png]]
+
+* 収集データの分析フローの概要
+** code                                                            :ARCHIVE:
+#+NAME: analysis-flow
+#+BEGIN_SRC dot :file img/analysis-flow.png :exports results :cache no :cmdline -Nfontname="MigMix 2P" -Tpng
+  digraph G {
+      node [shape = rectangle];
+      // 圃場ポリゴン，作業項目，農機一覧
+      // レポサク記録，レポサク軌跡から圃場作業時間を算出//
+      rankdir=TB
+      subgraph cluster1 {
+          label="マスタデータ"
+          fontname="MigMix 2P"
+          a [label="圃場ポリゴン", style=filled, color="#deebf7"];
+          b [label="作業項目", style=filled, color="#deebf7"];
+          c [label="農機一覧", style=filled, color="#deebf7"];
+      }
+
+      Act_a [label = "生産活動", shape=ellipse, style=filled, color="#fdc086"];
+      user [label ="人", shape=circle, style=filled, color="lightblue"];
+      diary [label = "作業日誌(Excel)",shape=note,style=filled, color="#beaed4"];
+
+      reposaku [label = "軌跡取\n得端末", shape=circle, style=filled, color="#7fc97f"];
+      repo_1 [label = "車両軌跡", style=filled, color="#deebf7"];
+      repo_2 [label = "車両軌跡帳票",shape=note,style=filled, color="#beaed4"];
+
+      x25 [label = "自動操\n舵端末", shape=circle, style=filled, color="#7fc97f"];
+      tada [label = "変換プログラム",shape=octagon, style=filled, fillcolor="#ffff99"];
+      tbl_work [label="圃場作業能率", shape=note, style=filled, color="#beaed4"];
+
+      R_analysis [label = "集計・分析プログラム",shape=octagon,shape=octagon, style=filled, fillcolor="#ffff99"];
+      R_result [label ="集計・分析結果",shape=note, style=filled, color="#beaed4"];
+
+      Act_a -> user Act_a -> x25 Act_a -> reposaku
+
+      reposaku -> user
+
+      user -> diary user -> repo_1 repo_1 -> repo_2
+
+      x25 -> tada [label="端末ログ", fontname="MigMix 2P"] tada -> tbl_work
+
+      a -> R_analysis b -> R_analysis c -> R_analysis repo_1 -> R_analysis
+
+      R_analysis -> R_result
+
+      // レベル
+      {rank=same; R_result, repo_2, diary, tbl_work}
+  }
+#+END_SRC
+
+** figure
+#+ATTR_ORG: :width 300
+#+RESULTS: analysis-flow
+[[file:img/analysis-flow.png]]
+* COMMENT コメント
+** 参考

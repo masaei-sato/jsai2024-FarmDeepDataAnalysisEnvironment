@@ -25,7 +25,7 @@
 ##   -u USER_CONTENT, --user_content=USER_CONTENT
 ## 
 ## Example usage:
-##   Rscript ./ai.R "Hello, how are you?"
+##   Rscript ./ai.R "What is the function to create a box plot in R?"
 ##
 ## Reference: The openai_api_request function of the
 ##     requestOpenaiGPT.R script in the agritechviz package are used.
@@ -43,7 +43,7 @@ library(jsonlite)
 ## * function
 openai_api_request <- function(api_key = Sys.getenv("OPENAI_API_KEY"),
                                model = "gpt-3.5-turbo",
-                               system_content = "You are a helpful assistant.",
+                               system_content = "You are my R coding assistant, helping with debugging, analysis, visualization, and best practices.", #You are a helpful assistant.
                                user_content,
                                temperature = 0.7,
                                max_tokens = 100,
