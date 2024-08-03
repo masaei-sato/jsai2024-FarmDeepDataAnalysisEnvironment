@@ -42,7 +42,7 @@ library(jsonlite)
 
 ## * function
 openai_api_request <- function(api_key = Sys.getenv("OPENAI_API_KEY"),
-                               model = "gpt-3.5-turbo",
+                               model = "gpt-4o-mini",
                                system_content = "You are my R coding assistant, helping with debugging, analysis, visualization, and best practices.", #You are a helpful assistant.
                                user_content,
                                temperature = 0.7,
@@ -95,7 +95,7 @@ user_text <- commandArgs(trailingOnly = TRUE)
 ## Get response using OpenAI API
 response <- openai_api_request(
   user_content = user_text,
-  model = "gpt-3.5-turbo", #gpt-3.5-turbo, gpt-3.5-turbo-1106
+  model = "gpt-4o-mini", #gpt-3.5-turbo, gpt-3.5-turbo-1106
   temperature = 1,
   max_tokens = 2000
 )
