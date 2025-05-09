@@ -136,5 +136,5 @@ OPENAI_API_KEY="your_api_key"
 プロジェクトに関する質問やフィードバックがある場合は、以下の方法で連絡してください：
 
 名前: 佐藤正衛
-メール: masaei@affrc.go.jp
+メール: sato.masaei269@naro.go.jp
 GitHub: https://gist.github.com/masaei-sato
